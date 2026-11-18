@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Marihøna i labyrinten</title>
+<meta name="theme-color" content="#2f6a3c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Mattelabyrint">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<style>
+@font-face{font-family:'Fredoka';font-style:normal;font-weight:500;font-display:swap;src:url('fredoka-latin-500-normal.woff2') format('woff2');}
+@font-face{font-family:'Fredoka';font-style:normal;font-weight:600;font-display:swap;src:url('fredoka-latin-600-normal.woff2') format('woff2');}
+@font-face{font-family:'Fredoka';font-style:normal;font-weight:700;font-display:swap;src:url('fredoka-latin-700-normal.woff2') format('woff2');}
+@font-face{font-family:'Nunito';font-style:normal;font-weight:500;font-display:swap;src:url('nunito-latin-500-normal.woff2') format('woff2');}
+@font-face{font-family:'Nunito';font-style:normal;font-weight:700;font-display:swap;src:url('nunito-latin-700-normal.woff2') format('woff2');}
+@font-face{font-family:'Nunito';font-style:normal;font-weight:800;font-display:swap;src:url('nunito-latin-800-normal.woff2') format('woff2');}
+:root{
+  /* Layout: one column (title, level picker, maze board, arrow pad); questions pop up over the board */
+  --leaf:#e6eed9;
+  --hedge:#2f6a3c;
+  --hedge-dark:#22502d;
+  --sand:#f4e3b6;
+  --gate:#c4632a;
+  --bug:#d6382a;
+  --gold:#e8a821;
+  --ink:#1e2a21;
+  --muted:#56665a;
+  --card:#fffaf0;
+  --good:#2f8f4a;
+  --display:'Fredoka','Nunito',system-ui,sans-serif;
+  --body:'Nunito',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--leaf);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+button{touch-action:manipulation}
+.wrap{max-width:640px;margin:0 auto;padding:calc(20px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(32px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));display:flex;flex-direction:column;gap:14px}
+header{display:flex;flex-direction:column;gap:4px}
+h1{font-family:var(--display);font-weight:700;font-size:2rem;margin:0;color:var(--hedge-dark);text-wrap:balance;letter-spacing:.2px}
+h1 .dot{color:var(--bug)}
+.sub{margin:0;color:var(--muted);max-width:60ch}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.levels{display:flex;gap:6px;flex-wrap:wrap}
+button{font:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.chip{border:2px solid var(--hedge);background:transparent;color:var(--hedge-dark);border-radius:999px;padding:6px 12px;font-family:var(--display);font-weight:600;font-size:.95rem;display:flex;flex-direction:column;align-items:flex-start;line-height:1.1}
+.chip small{font-family:var(--body);font-weight:700;font-size:.72rem;opacity:.8}
+.chip[aria-pressed="true"]{background:var(--hedge);color:#fff}
+.stats{display:flex;gap:8px;align-items:center}
+.pill{background:#fff;border-radius:999px;padding:6px 12px;font-family:var(--display);font-weight:600;font-variant-numeric:tabular-nums;box-shadow:0 1px 0 rgba(0,0,0,.08)}
+.pill .star{color:var(--gold)}
+.new{border:none;background:var(--bug);color:#fff;border-radius:999px;padding:8px 14px;font-family:var(--display);font-weight:600}
+.board{position:relative;width:100%;max-width:560px;margin:0 auto;aspect-ratio:1/1;border-radius:18px;overflow:hidden;box-shadow:0 6px 0 var(--hedge-dark);touch-action:none}
+canvas{display:block;width:100%;height:100%}
+.controls{display:flex;justify-content:center;align-items:center;gap:20px;flex-wrap:wrap}
+.pad{display:grid;grid-template-columns:repeat(3,58px);grid-template-rows:repeat(3,58px);gap:6px}
+.pad button{border:none;border-radius:14px;background:var(--hedge);color:#fff;font-size:1.5rem;box-shadow:0 4px 0 var(--hedge-dark)}
+.pad button:active{transform:translateY(3px);box-shadow:0 1px 0 var(--hedge-dark)}
+.pad .up{grid-column:2;grid-row:1}.pad .left{grid-column:1;grid-row:2}.pad .right{grid-column:3;grid-row:2}.pad .down{grid-column:2;grid-row:3}
+.help{margin:0;color:var(--muted);font-size:.92rem;max-width:30ch}
+.help b{color:var(--ink)}
+
+/* Question dialog */
+.modal{position:fixed;inset:0;background:rgba(22,45,28,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+.modal[hidden]{display:none}
+.card{background:var(--card);border-radius:22px;padding:22px 22px 18px;width:100%;max-width:460px;display:flex;flex-direction:column;gap:14px;box-shadow:0 10px 0 rgba(0,0,0,.18)}
+.eyebrow{margin:0;font-family:var(--display);font-weight:600;color:var(--gate);font-size:.95rem}
+.problem{margin:0;font-family:var(--display);font-weight:700;font-size:2.6rem;line-height:1.1;font-variant-numeric:tabular-nums;color:var(--ink)}
+.problem.story{font-size:1.35rem;font-weight:600;line-height:1.3;text-wrap:balance}
+.visual{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.visual:empty{display:none}
+.dots{display:flex;flex-wrap:wrap;gap:6px;max-width:220px}
+.dot-i{width:18px;height:18px;border-radius:50%;background:var(--bug);position:relative}
+.dot-i.b{background:var(--gold)}
+.dot-i.g{background:var(--hedge)}
+.dot-i.x{opacity:.35}
+.dot-i.x::after{content:"";position:absolute;left:-3px;right:-3px;top:50%;height:3px;margin-top:-1.5px;background:var(--ink);transform:rotate(-45deg);border-radius:2px}
+.grid{display:grid;gap:6px}
+.vis-op{font-family:var(--display);font-weight:700;font-size:1.5rem;color:var(--muted)}
+.cap{font-size:.85rem;color:var(--muted);width:100%}
+.opts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.opt{border:3px solid var(--hedge);background:var(--sand);color:var(--ink);border-radius:16px;padding:14px 0;font-family:var(--display);font-weight:700;font-size:2rem;font-variant-numeric:tabular-nums}
+.opt:hover:not(:disabled){background:#fff3cf}
+.opt:disabled{cursor:default}
+.opt.wrong{opacity:.4;text-decoration:line-through;border-color:var(--muted)}
+.opt.right{background:var(--good);border-color:var(--good);color:#fff}
+.shake{animation:shake .35s}
+@keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.msg{margin:0;min-height:1.4em;font-weight:800}
+.msg.ok{color:var(--good)}.msg.no{color:var(--bug)}
+.row{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.ghost{border:2px solid var(--muted);background:transparent;color:var(--muted);border-radius:999px;padding:6px 14px;font-weight:800}
+.primary{border:none;background:var(--hedge);color:#fff;border-radius:999px;padding:10px 18px;font-family:var(--display);font-weight:600;font-size:1.05rem}
+.bigstars{font-size:2.2rem;letter-spacing:4px;color:var(--gold);margin:0;line-height:1}
+.bigstars .off{color:#d9cfb8}
+@media (max-width:420px){
+  h1{font-size:1.6rem}
+  .problem{font-size:2.2rem}
+  .opt{font-size:1.7rem}
+  .help{display:none}
+}
+@media (prefers-reduced-motion:reduce){.shake{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>MARIHØNA I LABYRINTEN<span class="dot">.</span></h1>
+    <p class="sub">HJELP MARIHØNA TIL DEN ROSA BLOMSTEN. PÅ HVER PORT ER DET EN OPPGAVE. SVAR RIKTIG, SÅ ÅPNER PORTEN SEG. I SKATTEKISTENE ER DET EKSTRA OPPGAVER.</p>
+  </header>
+
+  <div class="bar">
+    <div class="levels" id="levels" role="group" aria-label="VELG NIVÅ"></div>
+    <div class="stats">
+      <span class="pill" id="starPill"><span class="star">★</span> 0</span>
+      <span class="pill" id="gatePill">PORTER 0/4</span>
+      <button class="new" id="newBtn" type="button">NY LABYRINT</button>
+    </div>
+  </div>
+
+  <div class="board" id="board">
+    <canvas id="cv" role="img" aria-label="LABYRINT MED EN MARIHØNE, PORTER OG EN BLOMST"></canvas>
+  </div>
+
+  <div class="controls">
+    <div class="pad" aria-label="FLYTT MARIHØNA">
+      <button class="up" type="button" data-d="1" aria-label="OPP">▲</button>
+      <button class="left" type="button" data-d="8" aria-label="VENSTRE">◀</button>
+      <button class="right" type="button" data-d="2" aria-label="HØYRE">▶</button>
+      <button class="down" type="button" data-d="4" aria-label="NED">▼</button>
+    </div>
+    <p class="help">GÅ MED <b>PILTASTENE</b>, KNAPPENE, ELLER TRYKK DER DU VIL GÅ. VELG SVAR MED <b>1</b>, <b>2</b> ELLER <b>3</b>.</p>
+  </div>
+</div>
+
+<div class="modal" id="qModal" hidden role="dialog" aria-modal="true" aria-labelledby="qText">
+  <div class="card">
+    <p class="eyebrow" id="qKind">PORT 1 AV 4</p>
+    <h2 class="problem" id="qText">3 + 4 = ?</h2>
+    <div class="visual" id="qVisual"></div>
+    <div class="opts" id="qOpts"></div>
+    <p class="msg" id="qMsg" aria-live="polite"></p>
+    <div class="row"><button class="ghost" id="qBack" type="button">GÅ TILBAKE</button></div>
+  </div>
+</div>
+
+<div class="modal" id="winModal" hidden role="dialog" aria-modal="true" aria-labelledby="winTitle">
+  <div class="card">
+    <p class="eyebrow">FERDIG!</p>
+    <h2 class="problem story" id="winTitle">MARIHØNA FANT BLOMSTEN!</h2>
+    <p class="bigstars" id="winStars"></p>
+    <p class="msg" id="winText" style="color:var(--ink)"></p>
+    <div class="row">
+      <button class="ghost" id="againBtn" type="button">SPILL IGJEN</button>
+      <button class="primary" id="nextBtn" type="button">NESTE NIVÅ</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+const N=1,E=2,S=4,W=8;
+const DX={1:0,2:1,4:0,8:-1}, DY={1:-1,2:0,4:1,8:0}, OPP={1:4,2:8,4:1,8:2};
+const ANGLE={1:0,2:Math.PI/2,4:Math.PI,8:-Math.PI/2};
+const css=getComputedStyle(document.documentElement);
+const C=k=>css.getPropertyValue(k).trim();
+const COL={hedge:C('--hedge'),hedgeDark:C('--hedge-dark'),sand:C('--sand'),gate:C('--gate'),bug:C('--bug'),gold:C('--gold'),ink:C('--ink')};
+const reduceMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const LEVELS=[
+  {name:'NIVÅ 1',hint:'TIL 10',size:6,gates:4,chests:1,max:10,mulMax:3,w:{add:4,sub:3,story:2,mul:1}},
+  {name:'NIVÅ 2',hint:'TIL 15',size:8,gates:5,chests:2,max:15,mulMax:4,w:{add:2,sub:2,missAdd:2,mul:2,story:2}},
+  {name:'NIVÅ 3',hint:'TIL 20 OG GANGING',size:10,gates:6,chests:2,max:20,mulMax:5,w:{add:2,sub:2,missAdd:1,missSub:1,mul:3,story:2}}
+];
+
+const ri=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+/* ---------- Questions ---------- */
+const STORIES=[
+  L=>{const a=ri(2,Math.min(8,L.max-2)),b=ri(1,Math.min(8,L.max-a));return{text:`DET ER ${a} BLOMSTER. ${b===1?'1 NY BLOMST':b+' NYE BLOMSTER'} VOKSER OPP. HVOR MANGE BLOMSTER ER DET NÅ?`,answer:a+b,key:`s1-${a}-${b}`};},
+  L=>{const a=ri(4,L.max),b=ri(1,a-1);return{text:`MARIHØNA FINNER ${a} BLADER. HUN SPISER ${b}. HVOR MANGE BLADER ER IGJEN?`,answer:a-b,key:`s2-${a}-${b}`};},
+  L=>{const a=ri(2,L.mulMax),b=ri(2,L.mulMax);return{text:`I HAGEN ER DET ${a} RADER MED TULIPANER. DET ER ${b} TULIPANER I HVER RAD. HVOR MANGE TULIPANER ER DET?`,answer:a*b,visual:{kind:'mul',a,b},key:`s3-${a}-${b}`};},
+  L=>{const a=ri(2,Math.floor(L.max/2));return{text:`${a} SNEGLER KOMMER PÅ FEST. SÅ KOMMER ${a} TIL. HVOR MANGE SNEGLER ER PÅ FESTEN?`,answer:a+a,key:`s4-${a}`};},
+  L=>{const n=ri(2,L.mulMax);return{text:`EN FUGL HAR 2 BEIN. HVOR MANGE BEIN HAR ${n} FUGLER?`,answer:2*n,key:`s5-${n}`};},
+  L=>{const a=ri(2,L.max-4),b=ri(1,Math.min(5,L.max-a));return{text:`MIA HAR ${a} EPLER. OLA HAR ${b===1?'1 EPLE':b+' EPLER'} MER ENN MIA. HVOR MANGE EPLER HAR OLA?`,answer:a+b,key:`s6-${a}-${b}`};},
+  L=>{const t=ri(5,L.max),a=ri(1,t-2);return{text:`DET SITTER ${t} BIER PÅ EN BLOMST. ${a===1?'1 BIE':a+' BIER'} FLYR BORT. HVOR MANGE BIER SITTER IGJEN?`,answer:t-a,key:`s7-${t}-${a}`};}
+];
+const GEN={
+  add(L){const s=ri(3,L.max),a=ri(1,s-1),b=s-a;return{text:`${a} + ${b} = ?`,answer:s,visual:s<=10?{kind:'add',a,b}:null,key:`add-${a}-${b}`};},
+  sub(L){const a=ri(3,L.max),b=ri(1,a-1);return{text:`${a} − ${b} = ?`,answer:a-b,visual:a<=10?{kind:'sub',a,b}:null,key:`sub-${a}-${b}`};},
+  mul(L){const a=ri(2,L.mulMax),b=ri(2,L.mulMax);return{text:`${a} × ${b} = ?`,answer:a*b,visual:{kind:'mul',a,b},key:`mul-${a}-${b}`};},
+  missAdd(L){const c=ri(4,L.max),a=ri(1,c-1);return{text:`${a} + ? = ${c}`,answer:c-a,key:`ma-${a}-${c}`};},
+  missSub(L){const a=ri(5,L.max),b=ri(1,a-1);return{text:`${a} − ? = ${a-b}`,answer:b,key:`ms-${a}-${b}`};},
+  story(L){const q=pick(STORIES)(L);q.story=true;return q;}
+};
+function weightedType(w){const ks=Object.keys(w);let t=ks.reduce((s,k)=>s+w[k],0)*Math.random();for(const k of ks){t-=w[k];if(t<0)return k;}return ks[0];}
+function makeQuestion(L,used,forceType){
+  let q;
+  for(let i=0;i<30;i++){q=GEN[forceType||weightedType(L.w)](L);if(!used.has(q.key))break;}
+  used.add(q.key);
+  const ans=q.answer,pool=[ans+1,ans-1,ans+2,ans-2];
+  if(q.visual&&q.visual.kind==='mul'){pool.push(q.visual.a+q.visual.b,ans+q.visual.a,ans-q.visual.b);}
+  const opts=new Set();
+  for(const p of shuffle(pool)){if(p>=0&&p!==ans&&!opts.has(p))opts.add(p);if(opts.size===2)break;}
+  q.options=shuffle([ans,...opts]);
+  q.tries=0;q.open=false;
+  return q;
+}
+
+/* ---------- Maze ---------- */
+function genMaze(n){
+  const g=new Array(n*n).fill(0),seen=new Array(n*n).fill(false),st=[0];seen[0]=true;
+  while(st.length){
+    const c=st[st.length-1],x=c%n,y=(c/n)|0;
+    const nb=[N,E,S,W].filter(d=>{const nx=x+DX[d],ny=y+DY[d];return nx>=0&&ny>=0&&nx<n&&ny<n&&!seen[ny*n+nx];});
+    if(!nb.length){st.pop();continue;}
+    const d=pick(nb),nc=(y+DY[d])*n+x+DX[d];
+    g[c]|=d;g[nc]|=OPP[d];seen[nc]=true;st.push(nc);
+  }
+  return g;
+}
+function solve(g,n){
+  const goal=n*n-1,prev=new Array(n*n).fill(-1),q=[0];prev[0]=0;
+  while(q.length){const c=q.shift();if(c===goal)break;const x=c%n,y=(c/n)|0;
+    for(const d of [N,E,S,W]){if(!(g[c]&d))continue;const nc=(y+DY[d])*n+x+DX[d];if(prev[nc]===-1){prev[nc]=c;q.push(nc);}}}
+  const path=[goal];while(path[0]!==0)path.unshift(prev[path[0]]);return path;
+}
+
+/* ---------- State ---------- */
+let G=null;
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d'),board=document.getElementById('board');
+let W_=0,dpr=1;
+
+function newGame(levelIdx){
+  const L=LEVELS[levelIdx],n=L.size,maze=genMaze(n),path=solve(maze,n);
+  const used=new Set(),gates=new Map(),chests=new Map();
+  const k=Math.min(L.gates,path.length-2);
+  for(let i=1;i<=k;i++){const idx=Math.round(i*(path.length-1)/(k+1));const q=makeQuestion(L,used);q.num=i;gates.set(path[idx],q);}
+  const onPath=new Set(path);
+  const ends=[];for(let c=1;c<n*n-1;c++){const g=maze[c];if(!onPath.has(c)&&[N,E,S,W].filter(d=>g&d).length===1)ends.push(c);}
+  shuffle(ends);
+  for(let i=0;i<Math.min(L.chests,ends.length);i++){const q=makeQuestion(L,used,L.mulMax>=4?'mul':'story');chests.set(ends[i],q);}
+  const tex=[];for(let i=0;i<n*n*4;i++)tex.push({x:Math.random(),y:Math.random(),r:.06+Math.random()*.14,l:Math.random()<.35});
+  G={levelIdx,L,n,maze,path,gates,chests,tex,pos:0,dir:E,rx:0,ry:0,anim:null,visited:new Set([0]),stars:0,maxStars:k+2*Math.min(L.chests,ends.length),won:false,modal:null};
+  renderLevels();updateStats();resize();
+}
+
+/* ---------- Drawing ---------- */
+function resize(){
+  dpr=window.devicePixelRatio||1;W_=board.clientWidth;
+  cv.width=Math.round(W_*dpr);cv.height=Math.round(W_*dpr);draw();
+}
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function star(cx,cy,r,fill,stroke){
+  ctx.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,rad=i%2?r*.45:r;ctx.lineTo(cx+Math.cos(a)*rad,cy+Math.sin(a)*rad);}ctx.closePath();
+  if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=Math.max(1.5,r*.12);ctx.stroke();}
+}
+function draw(){
+  if(!G||!W_)return;
+  const n=G.n,w=W_,cs=w/n,m=cs*.13;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle=COL.hedge;ctx.fillRect(0,0,w,w);
+  for(const t of G.tex){ctx.fillStyle=t.l?'#3c7d49':COL.hedgeDark;ctx.beginPath();ctx.arc(t.x*w,t.y*w,t.r*cs,0,Math.PI*2);ctx.fill();}
+  ctx.fillStyle=COL.sand;
+  for(let c=0;c<n*n;c++){const x=c%n,y=(c/n)|0,g=G.maze[c];
+    ctx.fillRect(x*cs+m,y*cs+m,cs-2*m,cs-2*m);
+    if(g&E)ctx.fillRect(x*cs+cs-m-.5,y*cs+m,2*m+1,cs-2*m);
+    if(g&S)ctx.fillRect(x*cs+m,y*cs+cs-m-.5,cs-2*m,2*m+1);}
+  // trail
+  ctx.fillStyle='#e3cc90';
+  for(const c of G.visited){const x=c%n,y=(c/n)|0;ctx.beginPath();ctx.arc(x*cs+cs/2,y*cs+cs/2,cs*.07,0,Math.PI*2);ctx.fill();}
+  // start
+  ctx.fillStyle='#e9d39a';rr(m*1.4,m*1.4,cs-2.8*m,cs-2.8*m,cs*.12);ctx.fill();
+  // goal flower
+  {const c=n*n-1,cx=(c%n)*cs+cs/2,cy=((c/n)|0)*cs+cs/2,r=cs*.3;
+    ctx.fillStyle='#ee6c98';for(let i=0;i<6;i++){const a=i*Math.PI/3;ctx.beginPath();ctx.arc(cx+Math.cos(a)*r*.62,cy+Math.sin(a)*r*.62,r*.42,0,Math.PI*2);ctx.fill();}
+    ctx.fillStyle=COL.gold;ctx.beginPath();ctx.arc(cx,cy,r*.42,0,Math.PI*2);ctx.fill();}
+  // gates
+  for(const [c,q] of G.gates){const x=c%n,y=(c/n)|0,cx=x*cs+cs/2,cy=y*cs+cs/2;
+    if(q.open){star(cx,cy,cs*.18,q.tries===0?COL.gold:null,q.tries===0?null:'#c9b27a');continue;}
+    const s=cs-2*m;ctx.fillStyle=COL.gate;rr(x*cs+m,y*cs+m,s,s,cs*.08);ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,.22)';ctx.lineWidth=Math.max(1,cs*.03);
+    for(let i=1;i<4;i++){const xx=x*cs+m+s*i/4;ctx.beginPath();ctx.moveTo(xx,y*cs+m+2);ctx.lineTo(xx,y*cs+m+s-2);ctx.stroke();}
+    ctx.fillStyle='#fffaf0';ctx.beginPath();ctx.arc(cx,cy,cs*.2,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=COL.ink;ctx.font=`700 ${Math.round(cs*.3)}px Fredoka, Nunito, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('?',cx,cy+cs*.015);}
+  // chests
+  for(const [c,q] of G.chests){const x=c%n,y=(c/n)|0,cx=x*cs+cs/2,cy=y*cs+cs/2;
+    if(q.open){star(cx,cy,cs*.2,COL.gold);continue;}
+    const bw=cs*.5,bh=cs*.36;ctx.fillStyle='#8a5320';rr(cx-bw/2,cy-bh/2,bw,bh,cs*.06);ctx.fill();
+    ctx.fillStyle=COL.gold;ctx.fillRect(cx-bw/2,cy-bh*.12,bw,bh*.22);ctx.fillRect(cx-cs*.04,cy-bh*.2,cs*.08,bh*.42);}
+  // player
+  let px=G.pos%n,py=(G.pos/n)|0;
+  if(G.anim){const t=Math.min(1,(performance.now()-G.anim.t0)/120),e=1-(1-t)*(1-t);px=G.anim.fx+(px-G.anim.fx)*e;py=G.anim.fy+(py-G.anim.fy)*e;}
+  bug(px*cs+cs/2,py*cs+cs/2,cs*.32,ANGLE[G.dir]);
+}
+function bug(cx,cy,r,ang){
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(ang);
+  ctx.fillStyle='rgba(0,0,0,.18)';ctx.beginPath();ctx.ellipse(r*.08,r*.2,r*.82,r*.86,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#1d1d1d';ctx.beginPath();ctx.arc(0,-r*.72,r*.45,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=COL.bug;ctx.beginPath();ctx.arc(0,r*.08,r*.8,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#1d1d1d';ctx.lineWidth=r*.08;ctx.beginPath();ctx.moveTo(0,-r*.66);ctx.lineTo(0,r*.86);ctx.stroke();
+  ctx.fillStyle='#1d1d1d';
+  for(const [sx,sy,sr] of [[.38,-.14,.15],[-.38,-.14,.15],[.42,.4,.13],[-.42,.4,.13]]){ctx.beginPath();ctx.arc(sx*r,sy*r,sr*r,0,Math.PI*2);ctx.fill();}
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(-r*.2,-r*.92,r*.1,0,Math.PI*2);ctx.arc(r*.2,-r*.92,r*.1,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+function loop(){draw();if(G.anim&&performance.now()-G.anim.t0<120)requestAnimationFrame(loop);else{G.anim=null;draw();}}
+
+/* ---------- Moving ---------- */
+function move(d){
+  if(!G||G.won||G.modal)return;
+  G.dir=d;
+  const n=G.n,c=G.pos;
+  if(!(G.maze[c]&d)){draw();return;}
+  const nc=c+DY[d]*n+DX[d];
+  const gate=G.gates.get(nc);
+  if(gate&&!gate.open){draw();openQuestion(nc,'gate');return;}
+  stepTo(nc);
+}
+function stepTo(nc){
+  const n=G.n;
+  G.anim=reduceMotion?null:{fx:G.pos%n,fy:(G.pos/n)|0,t0:performance.now()};
+  G.pos=nc;G.visited.add(nc);
+  if(G.anim)requestAnimationFrame(loop);else draw();
+  const chest=G.chests.get(nc);
+  if(chest&&!chest.open){setTimeout(()=>openQuestion(nc,'chest'),reduceMotion?0:140);return;}
+  if(nc===n*n-1)setTimeout(win,reduceMotion?0:180);
+}
+
+/* ---------- Question dialog ---------- */
+const qModal=document.getElementById('qModal'),qKind=document.getElementById('qKind'),qText=document.getElementById('qText'),
+      qVisual=document.getElementById('qVisual'),qOpts=document.getElementById('qOpts'),qMsg=document.getElementById('qMsg'),qBack=document.getElementById('qBack');
+const PRAISE=['BRA JOBBET!','RIKTIG!','SUPERT!','DU KLARTE DET!','FLOTT!'];
+
+function dots(count,cls,crossFrom){let h='<div class="dots">';for(let i=0;i<count;i++)h+=`<span class="dot-i ${cls}${crossFrom!=null&&i>=crossFrom?' x':''}"></span>`;return h+'</div>';}
+function visualHTML(v){
+  if(!v)return'';
+  if(v.kind==='add')return dots(v.a,'')+'<span class="vis-op">+</span>'+dots(v.b,'b')+'<span class="cap">TELL ALLE PRIKKENE.</span>';
+  if(v.kind==='sub')return dots(v.a,'',v.a-v.b)+`<span class="cap">${v.b} ${v.b===1?'PRIKK':'PRIKKER'} ER KRYSSET UT. TELL DE SOM ER IGJEN.</span>`;
+  if(v.kind==='mul'){let h=`<div class="grid" style="grid-template-columns:repeat(${v.b},18px)">`;for(let i=0;i<v.a*v.b;i++)h+='<span class="dot-i g"></span>';
+    return h+`</div><span class="cap">${v.a} RADER MED ${v.b} PRIKKER I HVER RAD.</span>`;}
+  return'';
+}
+function openQuestion(cell,type){
+  const q=(type==='gate'?G.gates:G.chests).get(cell);
+  G.modal={cell,type,q,done:false};
+  qKind.textContent=type==='gate'?`PORT ${q.num} AV ${G.gates.size}`:'SKATTEKISTE · 2 STJERNER';
+  qText.textContent=q.text;qText.classList.toggle('story',!!q.story);
+  qVisual.innerHTML=visualHTML(q.visual);
+  qMsg.textContent='';qMsg.className='msg';
+  qBack.textContent=type==='gate'?'GÅ TILBAKE':'HOPP OVER';
+  qOpts.innerHTML='';
+  q.options.forEach((v,i)=>{const b=document.createElement('button');b.type='button';b.className='opt';b.textContent=v;b.setAttribute('aria-label',`SVAR ${i+1}: ${v}`);b.addEventListener('click',()=>answer(b,v));qOpts.appendChild(b);});
+  qModal.hidden=false;qOpts.firstChild.focus();
+}
+function answer(btn,v){
+  const M=G.modal;if(!M||M.done||btn.disabled)return;
+  const q=M.q;
+  if(v===q.answer){
+    M.done=true;btn.classList.add('right');qOpts.querySelectorAll('button').forEach(b=>b.disabled=true);
+    q.open=true;
+    let earned=0;
+    if(M.type==='gate'&&q.tries===0)earned=1;
+    if(M.type==='chest')earned=q.tries===0?2:1;
+    G.stars+=earned;
+    qMsg.className='msg ok';qMsg.textContent=pick(PRAISE)+(earned?` +${earned} ★`:'');
+    updateStats();
+    setTimeout(()=>{closeQuestion();if(M.type==='gate')stepTo(M.cell);else{draw();if(M.cell===G.n*G.n-1)win();}},850);
+  }else{
+    q.tries++;btn.disabled=true;btn.classList.add('wrong');
+    btn.classList.remove('shake');void btn.offsetWidth;btn.classList.add('shake');
+    qMsg.className='msg no';
+    qMsg.textContent=q.visual?'IKKE HELT. TELL PRIKKENE OG PRØV IGJEN.':'IKKE HELT. PRØV IGJEN.';
+  }
+}
+function closeQuestion(){qModal.hidden=true;G.modal=null;draw();}
+qBack.addEventListener('click',closeQuestion);
+
+/* ---------- Win ---------- */
+const winModal=document.getElementById('winModal');
+function win(){
+  if(G.won)return;G.won=true;
+  const s=G.stars,max=G.maxStars;
+  let h='';for(let i=0;i<max;i++)h+=i<s?'★':'<span class="off">★</span>';
+  document.getElementById('winStars').innerHTML=h;
+  document.getElementById('winText').textContent=`DU FIKK ${s} AV ${max} STJERNER.`+(G.levelIdx<2?' KLAR FOR EN STØRRE LABYRINT?':' DU KLARTE DET VANSKELIGSTE NIVÅET!');
+  const next=document.getElementById('nextBtn');next.textContent=G.levelIdx<2?'NESTE NIVÅ':'NY LABYRINT';
+  winModal.hidden=false;next.focus();
+}
+document.getElementById('againBtn').addEventListener('click',()=>{winModal.hidden=true;newGame(G.levelIdx);});
+document.getElementById('nextBtn').addEventListener('click',()=>{winModal.hidden=true;newGame(Math.min(2,G.levelIdx+1));});
+
+/* ---------- Toolbar ---------- */
+const levelsEl=document.getElementById('levels');
+function renderLevels(){
+  levelsEl.innerHTML='';
+  LEVELS.forEach((L,i)=>{const b=document.createElement('button');b.type='button';b.className='chip';b.setAttribute('aria-pressed',String(i===G.levelIdx));
+    b.innerHTML=`${L.name}<small>${L.hint}</small>`;b.addEventListener('click',()=>newGame(i));levelsEl.appendChild(b);});
+}
+function updateStats(){
+  document.getElementById('starPill').innerHTML=`<span class="star">★</span> ${G.stars}`;
+  let open=0;for(const q of G.gates.values())if(q.open)open++;
+  document.getElementById('gatePill').textContent=`PORTER ${open}/${G.gates.size}`;
+}
+document.getElementById('newBtn').addEventListener('click',()=>newGame(G.levelIdx));
+
+/* ---------- Input ---------- */
+document.querySelectorAll('.pad button').forEach(b=>b.addEventListener('click',()=>move(+b.dataset.d)));
+const KEYS={ArrowUp:N,ArrowRight:E,ArrowDown:S,ArrowLeft:W,w:N,d:E,s:S,a:W,W:N,D:E,S:S,A:W};
+window.addEventListener('keydown',e=>{
+  if(!winModal.hidden)return;
+  if(G&&G.modal){
+    if(['1','2','3'].includes(e.key)){const b=qOpts.children[+e.key-1];if(b)b.click();e.preventDefault();}
+    else if(e.key==='Escape'){closeQuestion();}
+    return;
+  }
+  if(KEYS[e.key]){e.preventDefault();move(KEYS[e.key]);}
+});
+let pStart=null;
+cv.addEventListener('pointerdown',e=>{pStart={x:e.clientX,y:e.clientY};});
+cv.addEventListener('pointerup',e=>{
+  if(!pStart||!G)return;
+  let dx=e.clientX-pStart.x,dy=e.clientY-pStart.y;
+  if(Math.hypot(dx,dy)<20){ // tap: go toward the tapped spot
+    const r=cv.getBoundingClientRect(),cs=r.width/G.n;
+    dx=e.clientX-r.left-((G.pos%G.n)+.5)*cs;dy=e.clientY-r.top-(((G.pos/G.n)|0)+.5)*cs;
+    if(Math.hypot(dx,dy)<cs*.4){pStart=null;return;}
+  }
+  move(Math.abs(dx)>Math.abs(dy)?(dx>0?E:W):(dy>0?S:N));
+  pStart=null;
+});
+window.addEventListener('resize',resize);
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(draw);
+
+newGame(0);
+})();
+if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
+</script>
+</body>
+</html>
